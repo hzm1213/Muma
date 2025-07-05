@@ -127,3 +127,4 @@ jobs:
           else
             git commit -m "Sync Muma folder, rename nodes, update merged muma file and Base64 encoded mumab64"
             git push origin main
+          fi
