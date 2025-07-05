@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'  # 每6小时运行一次
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   sync_and_merge:
     runs-on: ubuntu-latest
@@ -17,6 +20,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}.git
 
       - name: Prepare Muma folder and cleanup
         run: |
@@ -122,5 +126,4 @@ jobs:
             echo "No changes to commit."
           else
             git commit -m "Sync Muma folder, rename nodes, update merged muma file and Base64 encoded mumab64"
-            git push
-          fi
+            git push origin main
