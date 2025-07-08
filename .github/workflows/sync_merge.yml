@@ -59,10 +59,17 @@ jobs:
             fi
           done
 
-      - name: Rename nodes with _序号 after region, discard旧后缀
+      - name: Rename nodes with _序号 after region, discard old suffix
         run: |
           total=$(grep -E '^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\/|^[[:space:]]*name:' muma | wc -l)
-          if (( total <= 9 )); then width=1; elif (( total <= 99 )); then width=2; else width=3; fi
+
+          if (( total < 100 )); then
+            width=2
+          elif (( total < 1000 )); then
+            width=3
+          else
+            width=4
+          fi
 
           awk -v width="$width" '
           function pad(n, w) {
@@ -75,24 +82,25 @@ jobs:
             return region
           }
           function extract_region(name) {
-            if (match(name, /^([^_ ]+TW)/, arr)) {
+            if (match(name, /^([^_ ]+)/, arr)) {
               return arr[1]
             } else {
-              return name
+              return "MUMA"
             }
           }
           BEGIN { count=1 }
           {
             line = $0
             if (match(line, /^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\//)) {
+              region = replace_region(extract_region(line))
+              seq = pad(count, width)
+              newname = region "_" seq
               if (match(line, /#.*$/)) {
-                orig = substr(line, RSTART+1)
-                region = replace_region(extract_region(orig))
-                seq = pad(count, width)
-                newname = region "_" seq
                 sub(/#.*$/, "#" newname, line)
-                count++
+              } else {
+                line = line "#" newname
               }
+              count++
               print line
             } else if (match(line, /^[[:space:]]*name:[[:space:]]*/)) {
               origname = substr(line, index(line, "name:") + 5)
