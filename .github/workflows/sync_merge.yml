@@ -28,6 +28,15 @@ jobs:
           rm -rf Muma/*
           rm -f muma mumab64
 
+      - name: Load previous checksum
+        run: |
+          if [ -f .last_checksum ]; then
+            last_checksum=$(cat .last_checksum)
+          else
+            last_checksum=""
+          fi
+          echo "last_checksum=$last_checksum" >> $GITHUB_ENV
+
       - name: Clone upstream trojan repo to temp folder
         run: |
           git clone --depth=1 https://github.com/suiyuan8/trojan temp-trojan
@@ -44,25 +53,40 @@ jobs:
             exit 1
           fi
 
-      - name: Merge all files into single muma file in root
+      - name: Merge all files into single muma file in root without extra blank lines, check for changes
         run: |
           : > muma
           find Muma -type f | sort | while read -r file; do
             if [ -s "$file" ]; then
-              last_char=$(tail -c 1 "$file")
-              if [ "$last_char" = "" ]; then
-                cat "$file" >> muma
-              else
-                cat "$file" >> muma
+              cat "$file" >> muma
+              if [ -n "$(tail -c1 "$file" | tr -d '\n')" ]; then
                 echo "" >> muma
               fi
             fi
           done
 
-      - name: Rename nodes with _序号 after region, discard旧后缀
+          # Calculate current checksum
+          current_checksum=$(sha256sum muma | awk '{print $1}')
+
+          # Compare with last checksum
+          if [ "$current_checksum" = "$last_checksum" ]; then
+            echo "No changes detected. Exiting workflow."
+            exit 0
+          else
+            echo "$current_checksum" > .last_checksum
+          fi
+
+      - name: Rename nodes with _序号 after region, remove @WangCai
         run: |
           total=$(grep -E '^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\/|^[[:space:]]*name:' muma | wc -l)
-          if (( total <= 9 )); then width=1; elif (( total <= 99 )); then width=2; else width=3; fi
+
+          if (( total < 100 )); then
+            width=2
+          elif (( total < 1000 )); then
+            width=3
+          else
+            width=4
+          fi
 
           awk -v width="$width" '
           function pad(n, w) {
@@ -75,35 +99,40 @@ jobs:
             return region
           }
           function extract_region(name) {
-            if (match(name, /^([^_ ]+TW)/, arr)) {
+            if (match(name, /^([^_ ]+)/, arr)) {
               return arr[1]
             } else {
-              return name
+              return "MUMA"
             }
           }
           BEGIN { count=1 }
           {
             line = $0
+            gsub(/@WangCai[0-9]*/, "", line)   # 删除所有 @WangCai 字样
+
             if (match(line, /^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\//)) {
-              if (match(line, /#.*$/)) {
-                orig = substr(line, RSTART+1)
-                region = replace_region(extract_region(orig))
-                seq = pad(count, width)
-                newname = region "_" seq
-                sub(/#.*$/, "#" newname, line)
-                count++
-              }
+              region = replace_region(extract_region(line))
+              seq = pad(count, width)
+              newname = region "_" seq
+
+              sub(/#.*$/, "", line)   # 删除所有原有备注
+              line = line "#" newname
+
+              count++
               print line
+
             } else if (match(line, /^[[:space:]]*name:[[:space:]]*/)) {
               origname = substr(line, index(line, "name:") + 5)
               gsub(/^ */, "", origname)
               gsub(/ *$/, "", origname)
+              gsub(/@WangCai[0-9]*/, "", origname)
               region = replace_region(extract_region(origname))
               seq = pad(count, width)
               newname = region "_" seq
               sub(/name:.*/, "name: " newname, line)
               count++
               print line
+
             } else {
               print line
             }
@@ -121,7 +150,7 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          git add Muma muma mumab64
+          git add Muma muma mumab64 .last_checksum
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
