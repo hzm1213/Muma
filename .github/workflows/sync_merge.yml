@@ -77,7 +77,7 @@ jobs:
             echo "$current_checksum" > .last_checksum
           fi
 
-      - name: Rename nodes with _序号 after region, remove @WangCai, and overwrite original remarks
+      - name: Rename nodes with _序号 after region, remove @WangCai only in remarks
         run: |
           total=$(grep -E '^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\/|^[[:space:]]*name:' muma | wc -l)
 
@@ -99,8 +99,12 @@ jobs:
             gsub(/🇨🇳TW/, "🇹🇼TW", region)
             return region
           }
-          function extract_region(name) {
-            if (match(name, /^([^_ ]+)/, arr)) {
+          function extract_region(line) {
+            if (match(line, /#([^_]+)/, arr)) {
+              region = arr[1]
+              gsub(/@WangCai[0-9]*/, "", region)   # 仅删除备注中的 WangCai
+              return region
+            } else if (match(line, /^([^_ ]+)/, arr)) {
               return arr[1]
             } else {
               return "MUMA"
@@ -109,7 +113,6 @@ jobs:
           BEGIN { count=1 }
           {
             line = $0
-            gsub(/@WangCai[0-9]*/, "", line)   # 删除所有 @WangCai 字样
 
             if (match(line, /^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\//)) {
               region = replace_region(extract_region(line))
