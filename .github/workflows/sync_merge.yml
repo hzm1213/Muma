@@ -59,6 +59,7 @@ jobs:
           find Muma -type f | sort | while read -r file; do
             if [ -s "$file" ]; then
               cat "$file" >> muma
+              # 如果文件最后没有换行符，在合并文件中补充
               if [ -n "$(tail -c1 "$file" | tr -d '\n')" ]; then
                 echo "" >> muma
               fi
@@ -76,7 +77,7 @@ jobs:
             echo "$current_checksum" > .last_checksum
           fi
 
-      - name: Rename nodes with _序号 after region, remove @WangCai
+      - name: Rename nodes with _序号 after region, remove @WangCai, and overwrite original remarks
         run: |
           total=$(grep -E '^(trojan|vless|ss|ssr|trojan-go|trojan-ws):\/\/|^[[:space:]]*name:' muma | wc -l)
 
@@ -115,7 +116,10 @@ jobs:
               seq = pad(count, width)
               newname = region "_" seq
 
-              sub(/#.*$/, "", line)   # 删除所有原有备注
+              # 删除原有 #备注
+              sub(/#.*$/, "", line)
+
+              # 追加新的 #地区_序号
               line = line "#" newname
 
               count++
